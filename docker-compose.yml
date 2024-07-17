@@ -1,0 +1,73 @@
+version: "3.8"
+services:
+  python:
+    build:
+      context: ./python/
+      dockerfile: Dockerfile
+    volumes:
+      - ./python/app:/usr/src/app
+    env_file:
+      - ./settings/python.env
+    ports:
+      - "9090:9090"
+    command: ["python", "main.py"]
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydatabase
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./back/
+      dockerfile: Dockerfile
+    working_dir: /myapp/back
+    command: bash -c "rm -f tmp/pids/server.pid && bundle exec rails s -p 3000 -b '0.0.0.0'"
+    volumes:
+      - .:/myapp
+      - ./vendor/bundle:/myapp/back/vendor/bundle
+    environment:
+      TZ: Asia/Tokyo
+      RAILS_ENV: development
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_NAME: mydatabase
+      DATABASE_USER: user
+      DATABASE_PASSWORD: password
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    env_file:
+      - ./settings/back.env
+
+  front:
+    build:
+      context: ./front/
+      dockerfile: Dockerfile
+    volumes:
+      - ./front/app:/usr/src/app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "8000:3000"
+    stdin_open: true
+    tty: true
+    env_file:
+      - ./settings/front.env
+
+volumes:
+  pgdata:
